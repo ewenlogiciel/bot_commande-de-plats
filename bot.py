@@ -7,7 +7,7 @@ USER = os.environ.get("BOT_USER")
 PASS = os.environ.get("BOT_PASS")
 
 LIEU_RETRAIT = "Wenov"
-PLAT_PREFERE = "Pâtes, poulet"
+PLAT_PREFERE = "Poulet, Pâtes"
 DESSERT_1_PREFERE = "Banane, Pomme, gaufre, gauffre"
 DESSERT_2_PREFERE = "Yaourt, compote, fruit"
 
@@ -31,9 +31,10 @@ def choisir_etape(page, texte_preferences, nom_etape, num_photo):
             choix_trouve = True
             break
 
-    if not choix_trouve:
+if not choix_trouve:
         print(f"-> Aucun favori trouvé pour {nom_etape}, sélection du 1er choix dispo.")
-        page.locator("text=/Choisir|Ajouter/i, .btn-add, .item-card, .product-item").first.click()
+        # Clique sur la première vignette cliquable de la zone principale (hors barre de menu)
+        page.locator("main [ng-click], .container [ng-click], .thumbnail, .card, .list-group-item, text=/Choisir|Ajouter/i").first.click()
 
 def choisir_point_retrait_sans_pmr(page):
     """Choisit le point de retrait qui N'EST PAS l'accès handicapé."""
@@ -74,7 +75,7 @@ def commander():
             page.fill("#formLogin__ctrl_Model_ID", USER)
             page.fill("#formLogin__ctrl_Model_Password", PASS)
             page.press("#formLogin__ctrl_Model_Password", "Enter")
-            
+
             # 2. Clic sur le gros bouton "RÉSERVER" visible au centre (avec .btn-block)
             print("2. Attente du bouton Réserver...")
             bouton_reserver = 'a.btn-block[ui-sref="authenticated.ok.create-reservation"]'
