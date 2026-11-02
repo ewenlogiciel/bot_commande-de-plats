@@ -1,0 +1,27 @@
+name: Commande Repas
+on:
+  schedule:
+    # 5h10 UTC = 6h10 heure d'hiver en France
+    - cron: '10 5 * * 1-5'
+  workflow_dispatch:
+
+jobs:
+  order:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install playwright && playwright install chromium
+      - name: Lancer la commande
+        env:
+          BOT_USER: ${{ secrets.BOT_USER }}
+          BOT_PASS: ${{ secrets.BOT_PASS }}
+        run: python bot.py
+      - name: Sauvegarder les captures d'écran et logs
+        if: always() # Sauvegarde les images même si le script a planté !
+        uses: actions/upload-artifact@v4
+        with:
+          name: captures-commande
+          path: "*.png"
