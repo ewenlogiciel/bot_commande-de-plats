@@ -75,10 +75,10 @@ def commander():
             page.fill("#formLogin__ctrl_Model_Password", PASS)
             page.press("#formLogin__ctrl_Model_Password", "Enter")
             
-            # 2. Clic sur le bouton "RÉSERVER"
+            # 2. Clic sur le gros bouton "RÉSERVER" visible au centre (avec .btn-block)
             print("2. Attente du bouton Réserver...")
-            bouton_reserver = 'a[ui-sref="authenticated.ok.create-reservation"]'
-            page.wait_for_selector(bouton_reserver, timeout=15000)
+            bouton_reserver = 'a.btn-block[ui-sref="authenticated.ok.create-reservation"]'
+            page.wait_for_selector(bouton_reserver, state="visible", timeout=15000)
             page.wait_for_timeout(DELAI_CLIC)  # Pause de 5s après connexion
             page.screenshot(path="01_connecte_dashboard.png")
             page.click(bouton_reserver)

@@ -2,7 +2,7 @@ name: Commande Repas
 on:
   schedule:
     # 5h10 UTC = 6h10 heure d'hiver en France
-    - cron: '10 5 * * 1-5'
+    - cron: '10 5 * * 1-2'
   workflow_dispatch:
 
 jobs:
