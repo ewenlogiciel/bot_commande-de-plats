@@ -1,29 +1,106 @@
 name: Commande Repas
+
 on:
+  # Plan B : le planificateur GitHub (peu fiable, souvent en retard ou sauté).
+  # 4 crons pour couvrir heure d'été et d'hiver ; le filtre ci-dessous
+  # vérifie l'heure réelle à Paris.
   schedule:
-    # 5h10 UTC = 6h10 heure d'hiver en France
-    - cron: '7 8 * * 1-2'
+    - cron: '7 4 * * 1-2'
+    - cron: '37 4 * * 1-2'
+    - cron: '7 5 * * 1-2'
+    - cron: '37 5 * * 1-2'
+  # Plan A : déclenché par cron-job.org via l'API GitHub, ou à la main.
   workflow_dispatch:
+    inputs:
+      force:
+        description: "Ignorer la fenêtre horaire et l'anti-doublon (tests)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: commande-repas
+  cancel-in-progress: false
 
 jobs:
   order:
     runs-on: ubuntu-latest
     steps:
+      - name: Vérifier la fenêtre horaire (Paris)
+        id: gate
+        env:
+          FORCE: ${{ inputs.force }}
+        run: |
+          HOUR=$((10#$(TZ=Europe/Paris date +%H)))
+          DAY=$(TZ=Europe/Paris date +%F)
+          echo "day=$DAY" >> "$GITHUB_OUTPUT"
+          echo "Heure à Paris : ${HOUR}h, date : $DAY, force=$FORCE"
+          # Les commandes ouvrent à 6h et ferment à 10h
+          if [ "$FORCE" = "true" ] || { [ "$HOUR" -ge 6 ] && [ "$HOUR" -lt 10 ]; }; then
+            echo "inwindow=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Hors de la fenêtre 6h-10h, on sort."
+            echo "inwindow=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Anti-doublon : un cache existe si une commande a déjà réussi aujourd'hui
+      - name: Vérifier si déjà commandé aujourd'hui
+        id: done
+        if: steps.gate.outputs.inwindow == 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: ordered.flag
+          key: commande-${{ steps.gate.outputs.day }}
+
+      - name: Décider
+        id: decide
+        env:
+          FORCE: ${{ inputs.force }}
+          INWINDOW: ${{ steps.gate.outputs.inwindow }}
+          CACHE_HIT: ${{ steps.done.outputs.cache-hit }}
+        run: |
+          if [ "$INWINDOW" = "true" ] && { [ "$FORCE" = "true" ] || [ "$CACHE_HIT" != "true" ]; }; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Rien à faire (hors fenêtre ou déjà commandé aujourd'hui)."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.decide.outputs.run == 'true'
+
       - uses: actions/setup-python@v5
+        if: steps.decide.outputs.run == 'true'
         with:
           python-version: '3.11'
-      - run: pip install playwright && playwright install chromium
+
+      - name: Installer Playwright
+        if: steps.decide.outputs.run == 'true'
+        run: pip install playwright && playwright install --with-deps chromium
+
       - name: Lancer la commande
+        if: steps.decide.outputs.run == 'true'
         env:
           BOT_USER: ${{ secrets.BOT_USER }}
           BOT_PASS: ${{ secrets.BOT_PASS }}
         run: python bot.py
-      - name: Sauvegarder les captures d'écran et logs
-        if: always() # Sauvegarde les images même si le script a planté !
+
+      - name: Marquer comme commandé
+        if: steps.decide.outputs.run == 'true' && success()
+        run: date > ordered.flag
+
+      - name: Sauvegarder le marqueur
+        if: steps.decide.outputs.run == 'true' && success()
+        uses: actions/cache/save@v4
+        with:
+          path: ordered.flag
+          key: commande-${{ steps.gate.outputs.day }}
+
+      - name: Sauvegarder les captures et pages d'erreur
+        if: always() && steps.decide.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: captures-commande
           path: |
             *.png
             *.html
+          if-no-files-found: ignore
