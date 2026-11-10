@@ -45,9 +45,67 @@ def boutons_choisir(zone):
     return zone.get_by_text("Choisir", exact=True)
 
 
+def titre_carte(bouton):
+    """Retourne le titre (1re ligne de texte) de la carte qui contient ce bouton."""
+    try:
+        carte = bouton.locator(
+            "xpath=ancestor::*[count(.//*[normalize-space(text())='Choisir'])=1]"
+        ).first
+        for ligne in (carte.text_content(timeout=3000) or "").splitlines():
+            ligne = ligne.strip()
+            if ligne and ligne != "Choisir":
+                return ligne
+    except Exception:
+        pass
+    return None
+
+
+def gerer_apres_clic_plat(page, titre, photo):
+    """Après le clic sur 'Choisir' d'un plat, deux cas possibles :
+    - plat avec image : une modale s'ouvre, il faut recliquer sur 'Choisir' ;
+    - plat sans image : la commande est prise directement et la page suivante s'affiche.
+    On détecte le cas pour ne jamais cliquer au hasard."""
+    modales = (
+        page.locator(".modal-dialog, [role='dialog'], .modal")
+        .filter(visible=True)
+        .filter(has=page.get_by_text("Choisir", exact=True))
+    )
+    titre_re = re.compile(re.escape(titre), re.I) if titre else None
+    cas = None
+
+    for _ in range(14):  # jusqu'à environ 7 secondes
+        page.wait_for_timeout(500)
+        if modales.count() > 0:
+            cas = "modale"
+            break
+        if titre_re is not None:
+            n = page.get_by_text(titre_re).filter(visible=True).count()
+            if n >= 2:      # titre dans la liste + dans la modale
+                cas = "modale"
+                break
+            if n == 0:      # le plat n'est plus affiché : on est passé à l'étape suivante
+                cas = "direct"
+                break
+
+    if cas is None:
+        page.screenshot(path=f"{photo}_cas_inconnu.png")
+        raise Exception("Impossible de savoir si une modale s'est ouverte après le choix du plat.")
+
+    if cas == "modale":
+        page.screenshot(path=f"{photo}_modale.png")
+        if modales.count() > 0:
+            boutons_choisir(modales.last).first.click()
+        else:
+            # La modale est en fin de page : son bouton est le dernier visible
+            boutons_choisir(page).filter(visible=True).last.click()
+        print("-> Plat confirmé dans la modale.")
+    else:
+        print("-> Plat sans image : commande directe, pas de modale.")
+
+
 def choisir_etape(page, texte_preferences, nom_etape, photo, modale=False):
     """Clique sur le bouton 'Choisir' de la carte correspondant à un mot-clé,
-    ou sur le 1er 'Choisir' dispo. Si modale=True, confirme aussi dans la modale."""
+    ou sur le 1er 'Choisir' dispo. Si modale=True, gère la modale éventuelle."""
     print(f"Sélection en cours : {nom_etape}...")
     attendre(page)
     page.screenshot(path=f"{photo}_avant_{nettoyer(nom_etape)}.png")
@@ -75,19 +133,13 @@ def choisir_etape(page, texte_preferences, nom_etape, photo, modale=False):
         print(f"-> Aucun favori trouvé pour {nom_etape}, sélection du 1er choix dispo.")
         bouton = boutons_choisir(page).filter(visible=True).first
 
+    # Le titre doit être lu AVANT le clic (la page change ensuite)
+    titre = titre_carte(bouton)
+    print(f"-> Article choisi : {titre}")
     bouton.click()
 
     if modale:
-        # Une modale s'ouvre : il faut recliquer sur "Choisir" dedans
-        page.wait_for_timeout(2000)
-        page.screenshot(path=f"{photo}_modale_{nettoyer(nom_etape)}.png")
-        modale_visible = page.locator(".modal-dialog, [role='dialog'], .modal").filter(visible=True)
-        if modale_visible.count() > 0:
-            boutons_choisir(modale_visible.last).first.click()
-        else:
-            # Plan B : la modale est en fin de page, donc son bouton est le dernier visible
-            boutons_choisir(page).filter(visible=True).last.click()
-        print(f"-> {nom_etape} : confirmé dans la modale.")
+        gerer_apres_clic_plat(page, titre, photo)
 
 
 def commander():
