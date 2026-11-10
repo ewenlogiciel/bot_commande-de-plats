@@ -34,6 +34,9 @@ def cliquer(page, cible, nom, photo):
     print(f"-> {nom}")
     attendre(page)
     page.screenshot(path=f"{photo}_{nettoyer(nom)}.png")
+    # Le site contient des liens cachés (menu) avec les mêmes textes :
+    # on ne garde que le premier élément réellement visible.
+    cible = cible.filter(visible=True).first
     cible.wait_for(state="visible", timeout=15000)
     cible.click()
 
@@ -116,21 +119,21 @@ def commander():
             cliquer(page, bouton_reserver, "2_Reserver", "01")
 
             # 3. Service : "CASIER LILLE : Wenov Euratech (midi)"
-            service = page.get_by_text(re.compile(r"Wenov Euratech", re.I)).first
+            service = page.get_by_text(re.compile(r"Wenov Euratech", re.I))
             cliquer(page, service, "3_Service_Wenov", "02")
 
             # 4. Lieu de livraison : "Casier Wenov ..." mais PAS "Casier Wenov PMR ..."
-            lieu = page.get_by_text(re.compile(r"Casier Wenov(?!\s+PMR)", re.I)).first
+            lieu = page.get_by_text(re.compile(r"Casier Wenov(?!\s+PMR)", re.I))
             cliquer(page, lieu, "4_Lieu_livraison_sans_PMR", "03")
 
             # 5. Offre : tuile "Formules"
-            offre = page.get_by_text(re.compile(r"^\s*Formules\s*$", re.I)).first
+            offre = page.get_by_text(re.compile(r"^\s*Formules\s*$", re.I))
             cliquer(page, offre, "5_Offre_Formules", "04")
 
             # 6. Formule : "FORMULE CLICK & COLLECT CASIER"
             formule = page.get_by_text(
                 re.compile(r"FORMULE CLICK\s*&\s*COLLECT CASIER", re.I)
-            ).first
+            )
             cliquer(page, formule, "6_Formule_Click_Collect", "05")
 
             # 7. Plat (avec modale) puis 2 desserts (sans modale, passage direct à la suite)
@@ -139,15 +142,15 @@ def commander():
             choisir_etape(page, DESSERT_2_PREFERE, "Dessert 2", "08")
 
             # 8. Bouton "Réserver" en bas de la page (pas "Continuer ma réservation")
-            reserver = page.get_by_text(re.compile(r"^\s*Réserver\s*$", re.I)).filter(visible=True).first
+            reserver = page.get_by_text(re.compile(r"^\s*Réserver\s*$", re.I))
             cliquer(page, reserver, "8_Reserver_final", "09")
 
             # 9. Panier : "Valider et payer"
-            valider = page.get_by_text(re.compile(r"Valider et payer", re.I)).filter(visible=True).first
+            valider = page.get_by_text(re.compile(r"Valider et payer", re.I))
             cliquer(page, valider, "9_Valider_et_payer", "10")
 
             # 10. Paiement : "Payer 1,00 €"  (dernier clic, irréversible)
-            payer = page.get_by_text(re.compile(r"^\s*Payer\s+\d", re.I)).filter(visible=True).first
+            payer = page.get_by_text(re.compile(r"^\s*Payer\s+\d", re.I))
             cliquer(page, payer, "10_Payer", "11")
             print("Clic sur Payer effectué.")
 
