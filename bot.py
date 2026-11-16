@@ -11,7 +11,7 @@ PASS = os.environ.get("BOT_PASS")
 # Les noms sur le site sont en majuscules sans accent ("PATE JAMBON EMMENTAL").
 PLAT_PREFERE = "Poulet, Pate, Pâte"
 DESSERT_1_PREFERE = "Banane, Pomme, gaufre, gauffre"
-DESSERT_2_PREFERE = "Yaourt, compote, fruit"
+DESSERT_2_PREFERE = "Beignet, Yaourt, compote, fruit"
 
 DELAI_CLIC = 5000  # 5 secondes entre chaque étape
 
@@ -108,7 +108,8 @@ def choisir_etape(page, texte_preferences, nom_etape, photo, modale=False):
     ou sur le 1er 'Choisir' dispo. Si modale=True, gère la modale éventuelle."""
     print(f"Sélection en cours : {nom_etape}...")
     attendre(page)
-    page.screenshot(path=f"{photo}_avant_{nettoyer(nom_etape)}.png")
+    # Pleine page : on veut voir TOUS les plats/desserts disponibles, pas seulement le haut
+    page.screenshot(path=f"{photo}_avant_{nettoyer(nom_etape)}.png", full_page=True)
 
     mots_cles = [m.strip() for m in texte_preferences.split(",") if m.strip()]
     bouton = None
@@ -136,10 +137,28 @@ def choisir_etape(page, texte_preferences, nom_etape, photo, modale=False):
     # Le titre doit être lu AVANT le clic (la page change ensuite)
     titre = titre_carte(bouton)
     print(f"-> Article choisi : {titre}")
+    with open("choix.txt", "a", encoding="utf-8") as f:
+        f.write(f"{nom_etape} : {titre}\n")
     bouton.click()
 
     if modale:
         gerer_apres_clic_plat(page, titre, photo)
+
+
+def lire_solde(page):
+    """Lit le 'Nouveau solde' affiché sur la page de paiement (solde après commande).
+    Retourne un float, ou None si introuvable."""
+    try:
+        texte = page.locator("body").inner_text(timeout=5000)
+    except Exception:
+        return None
+    m = re.search(r"Nouveau solde\s*(-?[\d\s]*\d[,.]\d{2})", texte, re.I)
+    if not m:
+        return None
+    try:
+        return float(re.sub(r"\s", "", m.group(1)).replace(",", "."))
+    except ValueError:
+        return None
 
 
 def commander():
@@ -202,6 +221,13 @@ def commander():
             cliquer(page, valider, "9_Valider_et_payer", "10")
 
             # 10. Paiement : "Payer 1,00 €"  (dernier clic, irréversible)
+            # On lit d'abord le "Nouveau solde" pour l'alerte e-mail (solde bas).
+            attendre(page)
+            solde_apres = lire_solde(page)
+            print(f"Solde après cette commande : {solde_apres}")
+            if solde_apres is not None:
+                with open("solde.txt", "w", encoding="utf-8") as f:
+                    f.write(f"{solde_apres:.2f}")
             payer = page.get_by_text(re.compile(r"^\s*Payer\s+\d", re.I))
             cliquer(page, payer, "10_Payer", "11")
             print("Clic sur Payer effectué.")

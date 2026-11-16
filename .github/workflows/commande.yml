@@ -13,7 +13,11 @@ on:
   workflow_dispatch:
     inputs:
       force:
-        description: "Ignorer la fenêtre horaire et l'anti-doublon (tests)"
+        description: "Ignorer la fenêtre horaire et l'anti-doublon (tests, peut commander !)"
+        type: boolean
+        default: false
+      test_mail:
+        description: "Tester seulement l'e-mail récapitulatif (ne commande rien)"
         type: boolean
         default: false
 
@@ -22,7 +26,30 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Test de l'e-mail d'alerte, sans toucher au site
+  test-mail:
+    if: ${{ inputs.test_mail }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Envoyer un e-mail de test (faux solde, faux choix, fausses captures)
+        env:
+          MAIL_USER: ${{ secrets.MAIL_USER }}
+          MAIL_PASS: ${{ secrets.MAIL_PASS }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+          SEUIL_SOLDE: "1.00"
+          MAIL_A_CHAQUE_COMMANDE: "true"
+        run: |
+          echo "0.50" > solde.txt
+          printf 'Plat : PLAT DE TEST\nDessert 1 : DESSERT DE TEST\nDessert 2 : AUTRE DESSERT DE TEST\n' > choix.txt
+          PNG='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+          for f in 06_avant_Plat 07_avant_Dessert_1 08_avant_Dessert_2; do
+            echo "$PNG" | base64 -d > "$f.png"
+          done
+          python mail_commande.py
+
   order:
+    if: ${{ !inputs.test_mail }}
     runs-on: ubuntu-latest
     steps:
       - name: Vérifier la fenêtre horaire (Paris)
@@ -94,6 +121,21 @@ jobs:
         with:
           path: ordered.flag
           key: commande-${{ steps.gate.outputs.day }}
+
+      # E-mail récapitulatif (choix, solde, captures des plats disponibles).
+      # Ne fait jamais échouer la run : la commande est déjà passée et le
+      # marqueur anti-doublon est déjà posé.
+      # MAIL_A_CHAQUE_COMMANDE: "false" = mail seulement si le solde est bas.
+      - name: Mail récapitulatif
+        if: steps.decide.outputs.run == 'true' && success()
+        continue-on-error: true
+        env:
+          MAIL_USER: ${{ secrets.MAIL_USER }}
+          MAIL_PASS: ${{ secrets.MAIL_PASS }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+          SEUIL_SOLDE: "1.00"
+          MAIL_A_CHAQUE_COMMANDE: "true"
+        run: python mail_commande.py
 
       - name: Sauvegarder les captures et pages d'erreur
         if: always() && steps.decide.outputs.run == 'true'
