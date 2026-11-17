@@ -11,7 +11,7 @@ PASS = os.environ.get("BOT_PASS")
 # Les noms sur le site sont en majuscules sans accent ("PATE JAMBON EMMENTAL").
 PLAT_PREFERE = "Poulet, Pate, Pâte"
 DESSERT_1_PREFERE = "Banane, Pomme, gaufre, gauffre"
-DESSERT_2_PREFERE = "Beignet, Yaourt, compote, fruit"
+DESSERT_2_PREFERE = "Beignet, Donut, Yaourt, compote, fruit"
 
 DELAI_CLIC = 5000  # 5 secondes entre chaque étape
 
